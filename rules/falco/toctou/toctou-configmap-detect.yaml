@@ -1,0 +1,12 @@
+- rule: Lab - TOCTOU ConfigMap Overwrite
+  desc: Detects a potential time-of-check-time-of-use race where a ConfigMap is overwritten after initial validation.
+  condition: >
+    evt.type = "open" and
+    fd.name startswith "/etc" and
+    fd.name contains "configmap" and
+    evt.arg.flags contains "O_WRONLY"
+  output: >
+    [Lab] ConfigMap TOCTOU overwrite attempt detected: file=%fd.name
+  priority: WARNING
+  source: syscall
+  tags: [configmap, lab]

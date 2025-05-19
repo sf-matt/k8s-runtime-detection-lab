@@ -1,0 +1,30 @@
+name: Validate Detection Registry
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Make all scripts executable
+        run: |
+          find ./scripts -type f -name "*.sh" -exec chmod +x {} \;
+          find ./lifecycle -type f -name "*.sh" -exec chmod +x {} \;
+          find ./simulations -type f -name "*.sh" -exec chmod +x {} \;
+
+      - name: Run registry validator
+        run: ./scripts/validate-registry.sh
+
+      - name: Run rule + sim check
+        run: ./scripts/rule-check.sh

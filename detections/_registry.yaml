@@ -1,0 +1,26 @@
+- name: toctou-configmap-detect
+  tool: falco
+  category: toctou
+  rule: rules/falco/toctou/toctou-configmap-detect.yaml
+  sim: simulations/falco/toctou/simulate-toctou-configmap-detect.sh
+  mitre: [T1548]
+  validate: true
+  log_match: "TOCTOU ConfigMap modification attempt detected"
+
+- name: toctou-configmap-block
+  tool: kubearmor
+  category: toctou
+  rule: rules/kubearmor/toctou/toctou-configmap-block.yaml
+  sim: simulations/kubearmor/toctou/simulate-toctou-configmap-block.sh
+  mitre: [T1548]
+  validate: true
+  log_match: "Permission denied"
+
+- name: kubearmor-aws-credential-block
+  tool: kubearmor
+  category: creds
+  rule: rules/kubearmor/creds/aws-credential-access-block.yaml
+  sim: simulations/kubearmor/creds/simulate-aws-credential-access-block.sh
+  mitre: [T1552]
+  validate: true
+  log_match: "Permission denied"

@@ -1,0 +1,17 @@
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: toctou-configmap-block
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: demo-kubearmor
+  file:
+    matchDirectories:
+    - dir: /mnt/configmap/
+      recursive: true
+    action: Block
+  severity: 5
+  message: "Blocked attempt to write to /mnt/configmap"
+  tags: ["TOCTOU", "configmap", "runtime"]
