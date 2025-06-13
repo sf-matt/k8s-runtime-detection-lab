@@ -1,0 +1,19 @@
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: block-systemd-edit
+  namespace: default
+spec:
+  severity: 5
+  selector:
+    matchLabels:
+      app: demo-kubearmor
+  file:
+    matchDirectories:
+      - dir: /etc/systemd/system/
+        recursive: true
+      - dir: /lib/systemd/system/
+        recursive: true
+      - dir: /mnt/systemd/
+        recursive: true
+  action: Block

@@ -1,7 +1,6 @@
 #!/bin/bash
 
 REGISTRY_FILE="detections/_registry.yaml"
-TMP_FILTERED=".filtered-entries.yaml"
 
 if ! [ -f "$REGISTRY_FILE" ]; then
   echo "❌ Registry file not found: $REGISTRY_FILE"
@@ -15,7 +14,6 @@ fi
 
 CATEGORY_FILTER=""
 AUTO_MODE=false
-INCLUDE_K8SAUDIT=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -27,10 +25,6 @@ while [[ $# -gt 0 ]]; do
       AUTO_MODE=true
       shift
       ;;
-    --include-k8saudit)
-      INCLUDE_K8SAUDIT=true
-      shift
-      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -38,87 +32,75 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Filter once, output as structured YAML
-if [ "$INCLUDE_K8SAUDIT" = false ]; then
-  yq e '.[] | select(.tool != "k8saudit")' "$REGISTRY_FILE" > "$TMP_FILTERED"
+if [ -n "$CATEGORY_FILTER" ]; then
+  mapfile -t ENTRIES < <(yq e -o=json ".[] | select(.category == \"$CATEGORY_FILTER\")" "$REGISTRY_FILE")
 else
-  yq e '.[]' "$REGISTRY_FILE" > "$TMP_FILTERED"
+  mapfile -t ENTRIES < <(yq e -o=json '.[]' "$REGISTRY_FILE")
 fi
 
-if [ ! -s "$TMP_FILTERED" ]; then
-  echo "❌ No detections found in registry."
+if [ ${#ENTRIES[@]} -eq 0 ]; then
+  echo "❌ No tests found for the selected criteria."
   exit 1
 fi
 
 function validate_logs() {
-  local KEYWORD="$1"
+  KEYWORD="$1"
   if [[ -n "$KEYWORD" ]]; then
     echo "[*] Checking logs for: $KEYWORD"
     ./lifecycle/check-falco-logs.sh "$KEYWORD"
   fi
 }
 
-function wait_for_falco() {
-  echo "[*] Waiting for Falco daemonset to be ready..."
-  kubectl rollout status daemonset falco -n falco || { echo "❌ Falco not ready"; exit 1; }
-}
-
 if [ "$AUTO_MODE" = true ]; then
   echo "🔁 Running all detections in auto mode..."
   echo
 
-  COUNT=$(yq e 'length' "$TMP_FILTERED")
-  for ((i=0; i<COUNT; i++)); do
-    NAME=$(yq e ".[$i].name" "$TMP_FILTERED")
-    TOOL=$(yq e ".[$i].tool" "$TMP_FILTERED")
-    SIM_SCRIPT=$(yq e ".[$i].sim" "$TMP_FILTERED")
-    VALIDATE=$(yq e ".[$i].validate" "$TMP_FILTERED")
-    LOG_MATCH=$(yq e ".[$i].log_match // """ "$TMP_FILTERED")
+  for entry in "${ENTRIES[@]}"; do
+    NAME=$(echo "$entry" | yq e '.name' -)
+    SIM_SCRIPT=$(echo "$entry" | yq e '.sim' -)
+    VALIDATE=$(echo "$entry" | yq e '.validate' -)
 
     echo "▶️  [$NAME] Running: $SIM_SCRIPT"
     if [ -x "$SIM_SCRIPT" ]; then
-      [[ "$TOOL" == "falco" ]] && wait_for_falco
       bash "$SIM_SCRIPT"
-      if [[ "$TOOL" == "falco" && "$VALIDATE" == "true" ]]; then
-        validate_logs "$LOG_MATCH"
-      fi
+  TOOL=$(echo "$SELECTED" | yq e '.tool' -)
+  if [[ "$TOOL" == "falco" && -n "$VALIDATE" ]]; then
+    validate_logs "$VALIDATE"
+  fi
     else
-      echo "❌ Script not found or not executable: $SIM_SCRIPT"
+      echo "❌ Simulation script not found or not executable: $SIM_SCRIPT"
     fi
     echo
   done
 
   echo "✅ Auto run complete."
-  rm -f "$TMP_FILTERED"
   exit 0
 fi
 
 while true; do
   clear
-  echo "🧪 Runtime Detection Lab"
-  echo "========================"
+  echo "🧪 Runtime Detection Lab (Dynamic Menu)"
+  echo "======================================="
   echo
 
   declare -A INDEX_MAP
   i=1
 
-  mapfile -t CATEGORIES < <(yq e '. | group_by(.category) | .[].0.category' "$TMP_FILTERED")
-
-  for CATEGORY in "${CATEGORIES[@]}"; do
+  for CATEGORY in $(yq e '.[].category' "$REGISTRY_FILE" | sort | uniq); do
     if [ -n "$CATEGORY_FILTER" ] && [ "$CATEGORY" != "$CATEGORY_FILTER" ]; then
       continue
     fi
 
     echo "[$CATEGORY]"
-    MATCHING_INDEXES=$(yq e "to_entries | map(select(.value.category == "$CATEGORY")) | .[].key" "$TMP_FILTERED")
-    while read -r idx; do
-      NAME=$(yq e ".[$idx].name" "$TMP_FILTERED")
-      TOOL=$(yq e ".[$idx].tool" "$TMP_FILTERED")
+    mapfile -t GROUP < <(yq e ".[] | select(.category == \"$CATEGORY\") | @json" "$REGISTRY_FILE")
+    for entry in "${GROUP[@]}"; do
+      NAME=$(echo "$entry" | yq e '.name' -)
+      TOOL=$(echo "$entry" | yq e '.tool' -)
       DESC=$(echo "$NAME" | sed 's/-/ /g' | sed 's/\<./\U&/g')
       echo "  $i) [$TOOL] $DESC"
-      INDEX_MAP[$i]=$idx
+      INDEX_MAP[$i]="$entry"
       ((i++))
-    done <<< "$MATCHING_INDEXES"
+    done
     echo
   done
 
@@ -135,18 +117,16 @@ while true; do
     break
   fi
 
-  IDX="${INDEX_MAP[$choice]}"
+  SELECTED="${INDEX_MAP[$choice]}"
 
-  if [[ -z "$IDX" ]]; then
+  if [[ -z "$SELECTED" ]]; then
     echo "❌ Invalid choice."
     read -p "Press Enter to continue..." _
     continue
   fi
 
-  TOOL=$(yq e ".[$IDX].tool" "$TMP_FILTERED")
-  SIM_SCRIPT=$(yq e ".[$IDX].sim" "$TMP_FILTERED")
-  VALIDATE=$(yq e ".[$IDX].validate" "$TMP_FILTERED")
-  LOG_MATCH=$(yq e ".[$IDX].log_match // """ "$TMP_FILTERED")
+  SIM_SCRIPT=$(echo "$SELECTED" | yq e '.sim' -)
+  VALIDATE=$(echo "$SELECTED" | yq e '.validate' -)
 
   if [[ ! -x "$SIM_SCRIPT" ]]; then
     echo "❌ Simulation script not found or not executable: $SIM_SCRIPT"
@@ -154,16 +134,13 @@ while true; do
     continue
   fi
 
-  [[ "$TOOL" == "falco" ]] && wait_for_falco
   echo "▶️  Running simulation: $SIM_SCRIPT"
   bash "$SIM_SCRIPT"
-
-  if [[ "$TOOL" == "falco" && "$VALIDATE" == "true" ]]; then
-    validate_logs "$LOG_MATCH"
+  TOOL=$(echo "$SELECTED" | yq e '.tool' -)
+  if [[ "$TOOL" == "falco" && -n "$VALIDATE" ]]; then
+    validate_logs "$VALIDATE"
   fi
 
   echo
   read -p "Press Enter to return to main menu..." _
 done
-
-rm -f "$TMP_FILTERED"

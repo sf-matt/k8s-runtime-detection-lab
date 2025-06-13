@@ -24,3 +24,12 @@
   mitre: [T1552]
   validate: true
   log_match: "Permission denied"
+
+- name: kubearmor-policy-block-systemd-edit
+  tool: kubearmor
+  category: persistence
+  rule: rules/kubearmor/persistence/kubearmor-policy-block-systemd-edit.yaml
+  sim: simulations/kubearmor/persistence/simulate-kubearmor-policy-block-systemd-edit.sh
+  mitre: [T1036.004]
+  validate: true
+  log_match: "Permission denied"
