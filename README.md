@@ -1,7 +1,7 @@
 # ☁️ K8s Runtime Detection Lab
 
-![CI](https://github.com/sf-matt/k8s-runtime-detection-lab/actions/workflows/validate.yaml/badge.svg)  
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)  
+![CI](https://github.com/sf-matt/k8s-runtime-detection-lab/actions/workflows/validate.yaml/badge.svg)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![GitHub](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/sf-matt/k8s-runtime-detection-lab)
 
 This repository is a lab-driven framework for building and testing Kubernetes runtime security detections using tools like **Falco** and **KubeArmor**.
@@ -60,7 +60,7 @@ It will:
 - Scaffold matching rule and sim files
 - Print output locations
 
-See `CONTRIBUTING.md` for more.
+See `scaffold-instructions.md` for more.
 
 ---
 
@@ -73,7 +73,7 @@ See `CONTRIBUTING.md` for more.
 │   └── _registry.yaml              # Master detection index
 ├── lifecycle/
 │   ├── deploy-falco-rules.sh       # Merges and applies rules
-│   └── test-lab.sh              # Interactive detection runner
+│   └── test-lab.sh                 # Interactive detection runner
 ├── rules/
 │   ├── falco/
 │   └── kubearmor/
